@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>OtO 20 終極密碼</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
+<style>
+  /* 版面概念：整個數字範圍是一條光譜，每猜一次就把光譜兩端遮暗，剩下的亮區就是可能的密碼。 */
+  :root {
+    color-scheme: dark;
+    --ink: #0a0c11; --panel: #131722; --panel-2: #1a1f2d; --line: #283044;
+    --fg: #eef1f7; --muted: #8b93a7;
+    --hi: #ff3b4e; --lo: #3b82ff; --win: #2fe37a; --warn: #ffb020;
+    --spectrum: linear-gradient(90deg, #8b5cff 0%, #3b82ff 18%, #22d3ee 34%, #2fe37a 50%, #e8f03a 64%, #ffb020 78%, #ff3b4e 100%);
+    --f-body: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+    --f-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--ink); color: var(--fg); font-family: var(--f-body); }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid #22d3ee; outline-offset: 2px; }
+  .bar { height: 6px; background: var(--spectrum); }
+  .wrap { min-height: calc(100% - 6px); display: flex; flex-direction: column; gap: 3vh; padding-block: 3vh 4vh; padding-left: max(16px, env(safe-area-inset-left, 0px), 4vw); padding-right: max(16px, env(safe-area-inset-right, 0px), 4vw); }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px; }
+  header h1 { margin: 0; font-weight: 900; font-size: clamp(24px, 3vw, 44px); letter-spacing: .04em; }
+  header span { font: 500 clamp(11px, 1vw, 15px) var(--f-mono); color: var(--muted); letter-spacing: .14em; }
+  .btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 12px; padding: 12px 20px; font-weight: 700; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--fg); color: var(--ink); border-color: var(--fg); font-weight: 900; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* 設定 */
+  #setup { max-width: 560px; width: 100%; margin: 6vh auto 0; display: grid; gap: 18px; }
+  #setup h2 { margin: 0; font-size: 32px; font-weight: 900; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); font-weight: 700; }
+  .field { width: 100%; padding: 14px 16px; font: 700 26px var(--f-mono); background: var(--panel); border: 2px solid var(--line); border-radius: 12px; outline: none; }
+  .field:focus { border-color: #22d3ee; }
+  .pw { display: flex; gap: 8px; }
+  .pw .field { flex: 1; min-width: 0; }
+  .err { color: var(--hi); font-weight: 700; min-height: 1.4em; }
+  .note { color: var(--muted); font-size: 14px; margin: 0; }
+
+  /* 遊戲 */
+  #game { flex: 1; display: grid; grid-template-rows: auto auto auto 1fr; gap: 3.5vh; }
+  .range { display: flex; align-items: center; justify-content: center; gap: 3vw; font: 700 clamp(64px, 13vw, 220px) var(--f-mono); line-height: 1; font-variant-numeric: tabular-nums; }
+  .range .tilde { color: var(--muted); font-weight: 500; font-size: .5em; }
+  .range .n { transition: color .3s; }
+  .range .n.flash { animation: flash .7s; }
+  @keyframes flash { 0% { color: var(--c); transform: scale(1.12); } 100% { transform: none; } }
+  .status { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 22px; align-items: center; font-size: clamp(16px, 1.6vw, 26px); color: var(--muted); }
+  .status b { color: var(--fg); font-family: var(--f-mono); }
+  .danger { color: var(--warn); font-weight: 900; border: 2px solid var(--warn); border-radius: 99px; padding: 2px 14px; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .4; } }
+
+  .track { position: relative; height: clamp(26px, 4vh, 44px); border-radius: 99px; background: var(--spectrum); }
+  .shade { position: absolute; top: -2px; bottom: -2px; background: color-mix(in srgb, var(--ink) 86%, transparent); transition: left .5s, right .5s, width .5s; }
+  .shade.l { left: -2px; border-radius: 99px 0 0 99px; }
+  .shade.r { right: -2px; border-radius: 0 99px 99px 0; }
+  .tick { position: absolute; top: 100%; transform: translateX(-50%); font: 600 clamp(11px, 1vw, 15px) var(--f-mono); color: var(--muted); padding-top: 6px; white-space: nowrap; }
+  .tick::before { content: ''; position: absolute; left: 50%; top: -8px; width: 2px; height: 10px; background: var(--muted); }
+  .ends { display: flex; justify-content: space-between; font: 600 13px var(--f-mono); color: var(--muted); margin-top: -2.4vh; }
+
+  .play { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4vw; align-items: start; min-height: 0; }
+  @media (max-width: 760px) { .play { grid-template-columns: 1fr; } }
+  .guess { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+  .hist { min-width: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .guess form { display: flex; gap: 10px; }
+  #g { flex: 1; min-width: 0; width: 100%; padding: 16px 20px; font: 700 clamp(32px, 4vw, 60px) var(--f-mono); background: var(--panel); border: 2px solid var(--line); border-radius: 16px; outline: none; text-align: center; }
+  #g:focus { border-color: #22d3ee; }
+  .guess .btn.primary { font-size: clamp(18px, 1.8vw, 26px); padding: 0 28px; }
+  .msg { font-size: clamp(18px, 2vw, 30px); font-weight: 900; min-height: 1.5em; }
+  .msg.up { color: var(--lo); } .msg.down { color: var(--hi); } .msg.bad { color: var(--warn); }
+  .ctrl { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ctrl .btn { font-size: 14px; padding: 8px 14px; }
+  .hist h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .14em; color: var(--muted); }
+  .hist ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .hist li { display: flex; gap: 8px; align-items: baseline; padding: 6px 12px; border-radius: 10px; background: var(--panel); font: 700 clamp(16px, 1.5vw, 22px) var(--f-mono); }
+  .hist li small { font: 700 12px var(--f-body); }
+  .hist li.big small { color: var(--hi); } .hist li.small small { color: var(--lo); }
+  .peek { font-family: var(--f-mono); color: var(--muted); }
+
+  /* 答對特效 */
+  #boom { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--win) 25%, var(--ink)), var(--ink) 70%); cursor: pointer; }
+  #boom canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .boom-in { position: relative; text-align: center; display: grid; gap: 2vh; padding: 0 16px; }
+  .boom-in .k { font: 700 clamp(18px, 2.2vw, 34px) var(--f-mono); letter-spacing: .3em; color: var(--win); }
+  .boom-in .num { font: 700 clamp(120px, 26vw, 420px) var(--f-mono); line-height: .9; background: var(--spectrum); -webkit-background-clip: text; background-clip: text; color: transparent; animation: zoom .7s cubic-bezier(.2,1.5,.4,1); }
+  .boom-in .t { font-size: clamp(36px, 6vw, 96px); font-weight: 900; animation: rise .6s .25s both; }
+  .boom-in .s { color: var(--muted); font-size: clamp(14px, 1.6vw, 22px); animation: rise .6s .4s both; }
+  .flashbang { position: fixed; inset: 0; background: #fff; z-index: 30; pointer-events: none; animation: fade .6s forwards; }
+  @keyframes zoom { from { transform: scale(.2) rotate(-8deg); opacity: 0; } }
+  @keyframes rise { from { transform: translateY(30px); opacity: 0; } }
+  @keyframes fade { to { opacity: 0; } }
+  .shake { animation: shake .45s; }
+  @keyframes shake { 20% { transform: translate(-10px, 4px); } 40% { transform: translate(9px, -6px); } 60% { transform: translate(-6px, 3px); } 80% { transform: translate(4px, -2px); } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="bar"></div>
+<div class="wrap" id="wrap">
+  <header><h1>終極密碼</h1><span>OtO 20 · 2006 — 2026</span></header>
+
+  <form id="setup" autocomplete="off">
+    <h2>設定這一局</h2>
+    <div class="fields">
+      <label>下界<input class="field" id="lo" type="number" inputmode="numeric" value="1"></label>
+      <label>上界<input class="field" id="hi" type="number" inputmode="numeric" value="100"></label>
+    </div>
+    <label>終極密碼（包含上下界）
+      <div class="pw">
+        <input class="field" id="pw" type="password" inputmode="numeric" placeholder="輸入或隨機產生">
+        <button class="btn" type="button" id="show">顯示</button>
+        <button class="btn" type="button" id="rand">隨機</button>
+      </div>
+    </label>
+    <div class="err" id="setErr"></div>
+    <button class="btn primary" type="submit" style="padding:16px;font-size:20px">開始遊戲</button>
+    <p class="note">密碼輸入後會隱藏，投影時不會被看到。每猜一次，範圍會自動縮小；猜中密碼就會觸發慶祝特效。</p>
+  </form>
+
+  <section id="game" hidden>
+    <div class="range"><span class="n" id="rLo">1</span><span class="tilde">~</span><span class="n" id="rHi">100</span></div>
+    <div class="status" id="status"></div>
+    <div>
+      <div class="track" id="track"><div class="shade l" id="shL"></div><div class="shade r" id="shR"></div></div>
+    </div>
+    <div class="play">
+      <div class="guess">
+        <form id="gForm" autocomplete="off">
+          <input id="g" type="number" inputmode="numeric" placeholder="輸入數字" aria-label="猜的數字">
+          <button class="btn primary" type="submit">確定</button>
+        </form>
+        <div class="msg" id="msg" aria-live="polite"></div>
+        <div class="ctrl">
+          <button class="btn" type="button" id="undo">撤銷上一步</button>
+          <button class="btn" type="button" id="peek">偷看密碼</button>
+          <button class="btn" type="button" id="restart">重新設定</button>
+        </div>
+      </div>
+      <div class="hist"><h3>猜過的數字</h3><ol id="hist"></ol></div>
+    </div>
+  </section>
+</div>
+
+<div id="boom" hidden>
+  <canvas id="fx"></canvas>
+  <div class="boom-in">
+    <div class="k">ACCESS GRANTED</div>
+    <div class="num" id="bNum">42</div>
+    <div class="t">恭喜答對！</div>
+    <div class="s" id="bSub"></div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let G = null; // {min,max,pw,lo,hi,history:[{n,dir}]}
+
+  function save() { try { localStorage.setItem('oto20-pw', JSON.stringify(G)); } catch (_) {} }
+  try { G = JSON.parse(localStorage.getItem('oto20-pw') || 'null'); } catch (_) {}
+
+  $('show').onclick = () => { const p = $('pw'); p.type = p.type === 'password' ? 'text' : 'password'; $('show').textContent = p.type === 'password' ? '顯示' : '隱藏'; };
+  $('rand').onclick = () => {
+    const lo = parseInt($('lo').value, 10), hi = parseInt($('hi').value, 10);
+    if (!(hi > lo)) { $('setErr').textContent = '請先設定正確的上下界'; return; }
+    $('pw').value = lo + Math.floor(Math.random() * (hi - lo + 1));
+    $('pw').type = 'password'; $('show').textContent = '顯示';
+    $('setErr').textContent = '';
+  };
+  $('setup').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const lo = Number($('lo').value), hi = Number($('hi').value), pw = Number($('pw').value);
+    const err = (t) => { $('setErr').textContent = t; };
+    if (!Number.isInteger(lo) || !Number.isInteger(hi) || $('lo').value === '' || $('hi').value === '') return err('上下界要是整數');
+    if (hi - lo < 2) return err('上界要比下界至少大 2');
+    if ($('pw').value === '' || !Number.isInteger(pw)) return err('請輸入終極密碼（整數），或按「隨機」');
+    if (pw < lo || pw > hi) return err(`密碼要在 ${lo} 到 ${hi} 之間`);
+    G = { min: lo, max: hi, pw, lo, hi, history: [] };
+    save(); showGame();
+  });
+
+  function showGame() { $('setup').hidden = true; $('game').hidden = false; render(); setTimeout(() => $('g').focus(), 50); }
+  function showSetup() {
+    $('game').hidden = true; $('setup').hidden = false;
+    if (G) { $('lo').value = G.min; $('hi').value = G.max; }
+    $('pw').value = ''; $('setErr').textContent = '';
+  }
+
+  function render(changed) {
+    $('rLo').textContent = G.lo; $('rHi').textContent = G.hi;
+    if (changed) { const el = $(changed === 'lo' ? 'rLo' : 'rHi'); el.style.setProperty('--c', changed === 'lo' ? 'var(--lo)' : 'var(--hi)'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    const left = G.hi - G.lo + 1;
+    $('status').innerHTML = `<span>還剩 <b>${left}</b> 個數字</span><span>已猜 <b>${G.history.length}</b> 次</span>` + (left <= 5 ? '<span class="danger">危險區</span>' : '');
+    const span = G.max - G.min + 1;
+    $('shL').style.width = `calc(${((G.lo - G.min) / span) * 100}% + 2px)`;
+    $('shR').style.width = `calc(${((G.max - G.hi) / span) * 100}% + 2px)`;
+    const track = $('track');
+    track.querySelectorAll('.tick').forEach((t) => t.remove());
+    const marks = [{ n: G.lo, p: (G.lo - G.min) / span }, { n: G.hi, p: (G.hi - G.min + 1) / span }];
+    for (const m of marks) { const t = document.createElement('div'); t.className = 'tick'; t.style.left = (m.p * 100) + '%'; t.textContent = m.n; track.appendChild(t); }
+    $('hist').innerHTML = G.history.map((h) => `<li class="${h.dir}"><span>${h.n}</span><small>${h.dir === 'big' ? '太大' : '太小'}</small></li>`).join('') || '<li><small style="color:var(--muted)">還沒有人猜</small></li>';
+    $('undo').disabled = !G.history.length;
+  }
+
+  $('gForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const raw = $('g').value.trim();
+    const n = Number(raw);
+    const m = $('msg');
+    m.className = 'msg';
+    if (raw === '' || !Number.isInteger(n)) { m.className = 'msg bad'; m.textContent = '請輸入整數'; return; }
+    if (n < G.lo || n > G.hi) { m.className = 'msg bad'; m.textContent = `要在 ${G.lo} ~ ${G.hi} 之間喔`; $('g').select(); return; }
+    $('g').value = '';
+    if (n === G.pw) { G.history.push({ n, dir: 'hit' }); save(); win(n); return; }
+    if (n > G.pw) { G.history.push({ n, dir: 'big', prev: [G.lo, G.hi] }); G.hi = n - 1; m.className = 'msg down'; m.textContent = `${n} 太大了`; render('hi'); }
+    else { G.history.push({ n, dir: 'small', prev: [G.lo, G.hi] }); G.lo = n + 1; m.className = 'msg up'; m.textContent = `${n} 太小了`; render('lo'); }
+    save();
+    if (G.lo === G.hi) { m.className = 'msg bad'; m.textContent = `只剩一個數字：${G.lo}！`; }
+    tick();
+  });
+
+  $('undo').onclick = () => {
+    const h = G.history.pop(); if (!h) return;
+    if (h.prev) { G.lo = h.prev[0]; G.hi = h.prev[1]; }
+    $('msg').className = 'msg'; $('msg').textContent = `已撤銷 ${h.n}`;
+    $('g').disabled = false; save(); render(); $('g').focus();
+  };
+  let peekTimer;
+  $('peek').onclick = () => {
+    const b = $('peek'); b.textContent = '密碼：' + G.pw; b.classList.add('peek');
+    clearTimeout(peekTimer); peekTimer = setTimeout(() => { b.textContent = '偷看密碼'; b.classList.remove('peek'); }, 1500);
+  };
+  let armed = false;
+  $('restart').onclick = () => {
+    const b = $('restart');
+    if (!armed && G.history.length) { armed = true; b.textContent = '再按一次確認'; setTimeout(() => { armed = false; b.textContent = '重新設定'; }, 2500); return; }
+    armed = false; b.textContent = '重新設定'; showSetup();
+  };
+
+  // ---------- 音效 ----------
+  let ac = null;
+  function audio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} return ac; }
+  function notes(list, type, vol) {
+    const a = audio(); if (!a) return; let t = a.currentTime;
+    for (const [f, d] of list) {
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = type || 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(vol || 0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + d * 1.6);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + d * 1.7); t += d;
+    }
+  }
+  function tick() { notes([[520, 0.07]], 'square', 0.08); }
+
+  // ---------- 答對特效 ----------
+  function win(n) {
+    const tries = G.history.length;
+    $('bNum').textContent = n;
+    $('bSub').textContent = `第 ${tries} 次猜中 · 範圍 ${G.min} ~ ${G.max} · 點一下畫面關閉`;
+    const f = document.createElement('div'); f.className = 'flashbang'; document.body.appendChild(f); setTimeout(() => f.remove(), 700);
+    $('boom').hidden = false;
+    document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
+    notes([[523, .12], [659, .12], [784, .12], [1046, .32], [784, .12], [1046, .5]], 'triangle', 0.22);
+    confetti();
+  }
+  let raf = 0;
+  function confetti() {
+    const cv = $('fx'), ctx = cv.getContext('2d');
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+    const colors = ['#8b5cff', '#3b82ff', '#22d3ee', '#2fe37a', '#e8f03a', '#ffb020', '#ff3b4e', '#ffffff'];
+    const P = [];
+    const burst = (x, y, count, power) => {
+      for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2, v = (0.4 + Math.random()) * power;
+        P.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - power * 0.35, r: 3 + Math.random() * 5, c: colors[i % colors.length], rot: Math.random() * 6, vr: (Math.random() - .5) * .4, life: 1, shape: Math.random() < .5 });
+      }
+    };
+    const W = innerWidth, H = innerHeight;
+    burst(W / 2, H / 2, 260, 14);
+    let t = 0;
+    cancelAnimationFrame(raf);
+    (function frame() {
+      t++;
+      if (t === 25) { burst(W * .2, H * .35, 120, 11); burst(W * .8, H * .35, 120, 11); }
+      if (t === 55) { burst(W * .35, H * .2, 90, 10); burst(W * .65, H * .2, 90, 10); }
+      if (t % 30 === 0 && t < 360) burst(Math.random() * W, H * (.15 + Math.random() * .3), 60, 9);
+      ctx.clearRect(0, 0, W, H);
+      for (const p of P) {
+        p.vy += 0.22; p.vx *= 0.985; p.vy *= 0.985; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life -= 0.004;
+        ctx.save(); ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c; ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        if (p.shape) ctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); else { ctx.beginPath(); ctx.arc(0, 0, p.r * .7, 0, 7); ctx.fill(); }
+        ctx.restore();
+      }
+      for (let i = P.length - 1; i >= 0; i--) if (P[i].life <= 0 || P[i].y > H + 40) P.splice(i, 1);
+      if (!$('boom').hidden && (P.length || t < 360)) raf = requestAnimationFrame(frame);
+    })();
+  }
+  $('boom').onclick = () => {
+    $('boom').hidden = true; cancelAnimationFrame(raf);
+    $('msg').className = 'msg'; $('msg').textContent = `密碼是 ${G.pw}，按「重新設定」開始下一局`;
+    $('rLo').textContent = $('rHi').textContent = G.pw;
+    $('g').disabled = true;
+  };
+  $('restart').addEventListener('click', () => { $('g').disabled = false; });
+
+  if (G && G.history && !G.history.some((h) => h.dir === 'hit')) showGame(); else showSetup();
+</script>
+</body>
+</html>
